@@ -1,0 +1,66 @@
+@RequestMapping(value = "/forgotMailPassword", method = RequestMethod.POST)
+@ResponseBody
+public Object forgotPassword(@RequestBody Map<String, Object> passwordBean) throws Exception {
+try {
+return getSuccessResponse(customerService.forgotPassword(passwordBean));
+} catch (Exception ex) {
+LOGGER.info("Message--" + ex.getMessage());
+return getErrorResponse(ex.getMessage());
+}
+
+}
+
+
+
+service
+
+
+LOGGER.info("customer forgot password..." + passwordBean);
+String userEmail = TypeUtils.toStringValue(passwordBean.get("emailId"));
+int roleId = TypeUtils.toIntegerValue(passwordBean.get("roleId"));
+LOGGER.info("emailId..." + userEmail);
+Map<String, Object> map = new HashMap<>();
+// User user = userMasterRepository.getCustomerEmailValidate(userEmail);
+User user = null;
+if (roleId == AppConstants.CUSTOMER) {
+user = userMasterRepository.getCustomerEmailValidateWithRoleId(userEmail, roleId);
+}
+if (user == null) {
+// map.put("response", "Mail sent Sucesssfully");
+ErrorCodes code = errorCodeRepository.findById(102).get();
+throw new CosmomoException(code.getErrorCode(), code.getErrorMessage());
+} else {
+Email email = new Email();
+ApiTypes.EmailSend response = null;
+String uid = UUID.randomUUID().toString();
+user.setOtp(uid);
+user.setSessionTimeLimit(new Date());
+String url = customerEmailUrl + "/forgot-set-password/" + uid + "/" + user.getUserId();
+Map<String, Object> model = new HashMap<>();
+model.put("otp", url);
+freemarkerConfig.setClassForTemplateLoading(this.getClass(), "/templates/");
+Template t = freemarkerConfig.getTemplate(AppConstants.FORGOTYOURPASSWORD);
+String text = FreeMarkerTemplateUtils.processTemplateIntoString(t, model);
+
+try {
+response = email.sendEmail("Forgot Password", userEmail, text, emailId, apiKey);
+} catch (Exception e) {
+e.printStackTrace();
+System.out.println(e.getMessage());
+}
+if (response != null) {
+System.out.println("MsgID to store locally: " + response.messageid); // Available only if sent to a
+// single recipient
+System.out.println("TransactionID to store locally: " + response.transactionid);
+}
+
+// .emailSend("Forgot Password", text, mailId);
+map.put("response", "Mail sent Sucesssfully");
+}
+return map;
+
+
+@Query(UserQuery.getCustomerEmailValidateWithRoleId)
+User getCustomerEmailValidateWithRoleId(@Param("emailId")String userEmail, @Param("roleId")int roleId);
+
+ public static final String getCustomerEmailValidateWithRoleId = "select u from #{#entityName} u where u.emailId=:emailId and u.role.roleId=:roleId";
